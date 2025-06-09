@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Vapi from '@vapi-ai/web';
 
-const publicApiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY || '4ca3d255-b687-467e-ad6a-4c2517af4f77';
-const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID || '7b325c7d-07e8-4bfc-a72a-dd1f3d619255';
+const publicApiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY || '';
+const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID || '';
 
 // Maximum number of reconnection attempts
 const MAX_RECONNECT_ATTEMPTS = 3;
