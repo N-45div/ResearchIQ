@@ -1,7 +1,3 @@
-Here’s an improved and polished version of your README for **ResearchIQ**, incorporating your voice agent and multi-agent system while removing the “multi-modal” references:
-
----
-
 # 🧠 ResearchIQ – Voice-Powered Multi-Agent Research Assistant
 
 ResearchIQ is an advanced research assistant built with [Next.js](https://nextjs.org), enabling voice-driven, multi-agent research workflows. Powered by Vapi AI and leading LLM providers, it retrieves and compares scholarly information from sources like Wikipedia and Google Scholar—making expert research accessible through natural conversation.
@@ -120,7 +116,3 @@ Highlights differences and agreements across AI-generated expert responses, help
 ## ▲ Deploy on Vercel
 
 Deploy easily using [Vercel](https://vercel.com/new?utm_source=create-next-app&utm_campaign=create-next-app-readme).
-
----
-
-Let me know if you’d like to include usage examples, UI screenshots, or contribution guidelines too.
