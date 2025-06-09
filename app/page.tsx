@@ -1,95 +1,106 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
+import Link from "next/link";
+import { IconBrain, IconSearch, IconChartPie, IconArrowRight } from "@tabler/icons-react";
+import { motion } from "framer-motion";
+import styles from './Home.module.css';
 
 export default function Home() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <div className={styles.container}>
+      {/* Animated blurred background shapes */}
+      <div className={styles.backgroundEffects}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 0.5, scale: 1.2 }}
+          transition={{ duration: 20, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
+          className={styles.backgroundBlob1}
         />
-        <ol>
-          <li>
-            Get started by editing <code>app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 0.4, scale: 1.1 }}
+          transition={{ duration: 25, repeat: Infinity, repeatType: "mirror", ease: "easeInOut", delay: 5 }}
+          className={styles.backgroundBlob2}
+        />
+      </div>
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+      {/* Hero Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className={styles.heroSection}
+      >
+        <motion.h1
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+          className={styles.heroTitle}
+        >
+          Uncover Deeper Insights.<br />Compare Multiple AIs.
+        </motion.h1>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
+          className={styles.heroSubtitle}
+        >
+          Harness the collective intelligence of leading AI models. Identify nuances, reduce bias, and gain comprehensive understanding for your research.
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.6, ease: "easeOut" }}
+          className={styles.buttonContainer}
+        >
+          <Link href="/chat" className={styles.primaryButton}>
+            Start Researching
+            <IconArrowRight size={20} className={styles.arrowIcon} />
+          </Link>
+          <Link href="/pricing" className={styles.secondaryButton}>
+            View Pricing
+          </Link>
+        </motion.div>
+      </motion.section>
+
+      {/* Features Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
+        className={styles.featuresSection}
+      >
+        <div className={styles.featuresGrid}>
+          {[
+            {
+              icon: <IconBrain size={36} className={styles.featureIcon} />,
+              title: "Mitigate AI Bias",
+              description: "Compare diverse AI perspectives to identify and reduce inherent biases, ensuring a more balanced research outcome."
+            },
+            {
+              icon: <IconSearch size={36} className={styles.featureIcon} />,
+              title: "Comprehensive Coverage",
+              description: "Leverage varied knowledge bases and data cutoffs from multiple AIs for thorough and well-rounded research insights."
+            },
+            {
+              icon: <IconChartPie size={36} className={styles.featureIcon} />,
+              title: "Scholarly Validation",
+              description: "Augment AI-generated content with direct links to academic papers, adding depth and credibility to your findings."
+            }
+          ].map((feature, i) => (
+            <motion.div
+              key={i}
+              className={styles.featureCard}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.8 + i * 0.2, ease: "easeOut" }}
+            >
+              {feature.icon}
+              <h3 className={styles.featureTitle}>{feature.title}</h3>
+              <p className={styles.featureDescription}>{feature.description}</p>
+            </motion.div>
+          ))}
         </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </motion.section>
     </div>
   );
 }

@@ -1,0 +1,54 @@
+.container {
+    position: relative;
+    min-height: 100vh;
+    background-color: #050505;
+}
+
+.sidebarVisible {
+    display: none;
+}
+
+.topNavbarVisible {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 50;
+}
+
+.topNavbarHidden {
+    display: none;
+}
+
+.mainContent {
+    min-height: 100vh;
+    background-color: #050505;
+    transition: all 0.2s ease-in-out;
+}
+
+.mainContentWithSidebar {
+    padding-top: 4rem;
+}
+
+/* Media queries */
+@media (min-width: 768px) {
+    .sidebarVisible {
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 16rem;
+        z-index: 40;
+    }
+
+    .topNavbarVisible {
+        display: none;
+    }
+
+    .mainContentWithSidebar {
+        padding-top: 0;
+        padding-left: 16rem;
+    }
+}

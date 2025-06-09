@@ -1,0 +1,100 @@
+.section {
+  width: 100%;
+  padding: 5rem 0 8rem;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+}
+
+.titleGradient {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  max-width: 48rem;
+  margin: 0 auto;
+  color: var(--text-secondary);
+  font-size: 1.125rem;
+  line-height: 1.6;
+  margin-bottom: 2.5rem;
+}
+
+.actionsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.button {
+  padding: 0.5rem 2rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.buttonPrimary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: white;
+}
+
+.buttonPrimary:hover {
+  box-shadow: 0 10px 25px rgba(0, 242, 254, 0.2);
+  transform: scale(1.05);
+}
+
+.buttonSecondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.buttonSecondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.05);
+}
+
+.buttonGradient {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: white;
+}
+
+.buttonGradient:hover {
+  box-shadow: 0 10px 25px rgba(0, 242, 254, 0.2);
+  transform: scale(1.05);
+}
+
+@media (min-width: 640px) {
+  .actionsContainer {
+    flex-direction: row;
+  }
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding: 8rem 0;
+  }
+  
+  .title {
+    font-size: 3.75rem;
+  }
+  
+  .subtitle {
+    font-size: 1.25rem;
+  }
+} 

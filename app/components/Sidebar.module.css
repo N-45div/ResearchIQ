@@ -1,0 +1,61 @@
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    width: 16rem;
+    height: 100vh;
+    z-index: 40;
+    padding: 2rem 1rem;
+}
+
+.logoContainer {
+    margin-bottom: 2.5rem;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+    text-align: center;
+}
+
+.nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.navLink {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    color: white;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.navLinkActive {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--accent-primary);
+}
+
+.navLink:hover:not(.navLinkActive) {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--accent-primary);
+}
+
+.icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}

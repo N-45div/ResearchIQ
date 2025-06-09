@@ -1,0 +1,108 @@
+.header {
+    width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background-color: rgba(5, 5, 5, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 70px;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.01em;
+}
+
+.nav {
+    display: flex;
+    gap: 2rem;
+}
+
+.navLink {
+    color: #fff;
+    transition: color 0.2s ease;
+    font-weight: 500;
+}
+
+.navLink:hover {
+    color: var(--accent-primary);
+}
+
+.authSection {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.loadingText {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.userEmail {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.signOutButton {
+    border: 1px solid var(--accent-secondary);
+    color: var(--accent-secondary);
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.signOutButton:hover {
+    background-color: rgba(79, 172, 254, 0.1);
+}
+
+.signInButton {
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+    color: #000;
+    padding: 0.5rem 1.5rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(0, 242, 254, 0.3);
+}
+
+.signInButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 242, 254, 0.4);
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 0 1rem;
+        height: 60px;
+    }
+
+    .nav {
+        gap: 1rem;
+    }
+
+    .userEmail {
+        display: none;
+    }
+}
