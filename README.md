@@ -1,26 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Here’s an improved and polished version of your README for **ResearchIQ**, incorporating your voice agent and multi-agent system while removing the “multi-modal” references:
 
-## Getting Started
+---
 
-First, set up your environment variables:
+# 🧠 ResearchIQ – Voice-Powered Multi-Agent Research Assistant
 
-1. Copy `.env.example` to `.env.local` and fill in the required values
-2. Get API keys for the following AI providers:
-   - [OpenRouter](https://openrouter.ai/) (for accessing multiple free models)
-   - [Groq](https://groq.com/) (for Llama 3.3 70B model)
-   - [Together.ai](https://together.ai/) (for Mixtral model)
-   - [SerpAPI](https://serpapi.com/) (for Google Scholar search capabilities)
+ResearchIQ is an advanced research assistant built with [Next.js](https://nextjs.org), enabling voice-driven, multi-agent research workflows. Powered by Vapi AI and leading LLM providers, it retrieves and compares scholarly information from sources like Wikipedia and Google Scholar—making expert research accessible through natural conversation.
 
-**IMPORTANT:** For the multi-agent system to work, you need at least one of these:
-- `GROQ_API_KEY` (preferred for best performance)
-- `TOGETHER_API_KEY` (as fallback)
+---
 
-The Google Scholar search requires:
-- `SERPAPI_API_KEY`
+## 🚀 Getting Started
 
-Without these keys, the system will fall back to using only Wikipedia search.
+### 1. Set Up Environment Variables
 
-Then, run the development server:
+1. Copy `.env.example` to `.env.local`
+2. Add the required API keys:
+
+* [OpenRouter](https://openrouter.ai/) – for accessing multiple free models
+* [Groq](https://groq.com/) – for LLaMA 3.3 70B model (preferred)
+* [Together.ai](https://together.ai/) – fallback for Mixtral model
+* [SerpAPI](https://serpapi.com/) – required for Google Scholar integration
+
+> ⚠️ **Required for functionality**
+> You must include at least one of:
+
+* `GROQ_API_KEY`
+* `TOGETHER_API_KEY`
+
+For Google Scholar features:
+
+* `SERPAPI_API_KEY`
+
+Without these, fallback will be Wikipedia search only.
+
+---
+
+### 2. Start the Development Server
 
 ```bash
 npm run dev
@@ -32,80 +46,81 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
-## AI Providers Configuration
+---
 
-This project uses multiple AI providers to deliver comprehensive research results. You'll need to set up API keys for each:
+## 🔧 AI Provider Configuration
 
-### OpenRouter
-- Sign up at [https://openrouter.ai/](https://openrouter.ai/)
-- Create an API key in your account dashboard
-- Add to `.env.local` as `OPENROUTER_API_KEY`
-- This gives you access to multiple free models including:
-  - deepseek/deepseek-r1-0528-qwen3-8b:free
-  - mistralai/devstral-small:free
-  - meta-llama/llama-3.3-8b-instruct:free
-  - qwen/qwen3-30b-a3b:free
-  - and more!
+### 🧩 OpenRouter
 
-### Groq
-- Sign up at [https://groq.com/](https://groq.com/)
-- Create an API key from your dashboard
-- Add to `.env.local` as `GROQ_API_KEY`
-- **Required for optimal performance of the Expert Comparison feature**
+* API Key: `OPENROUTER_API_KEY`
+* Models available:
 
-### Together.ai
-- Sign up at [https://together.ai/](https://together.ai/)
-- Generate an API key from your account
-- Add to `.env.local` as `TOGETHER_API_KEY`
-- Can be used as a fallback for the Expert Comparison feature
+  * deepseek/deepseek-r1
+  * mistralai/devstral-small
+  * meta-llama/llama-3.3-8b-instruct
+  * qwen/qwen3-30b-a3b
+  * others
 
-### SerpAPI (Google Scholar)
-- Sign up at [https://serpapi.com/](https://serpapi.com/)
-- Create an API key from your dashboard
-- Add to `.env.local` as `SERPAPI_API_KEY`
-- **Required for Google Scholar search in the Expert Comparison feature**
+### ⚡ Groq (Preferred for Expert Comparison)
 
-## Features
+* API Key: `GROQ_API_KEY`
+* Optimal for high-speed LLaMA-3-based reasoning
 
-### Multi-Model Research
-Compare responses from multiple AI models to get comprehensive insights on your research topics.
+### 🔁 Together.ai (Fallback)
 
-### Advanced Agent Research
-Use our advanced LangChain-powered multi-agent system with specialized research agents, Wikipedia search, Google Scholar, and human-in-the-loop capabilities for complex research tasks.
+* API Key: `TOGETHER_API_KEY`
+* Supports Mixtral and other open models
 
-### Expert Comparison System
-The Expert Comparison feature uses a multi-agent system with specialized agents for different research sources. It explicitly highlights contradictions between different sources, providing a more nuanced understanding of complex topics.
+### 🔍 SerpAPI
 
-## Troubleshooting
+* API Key: `SERPAPI_API_KEY`
+* Enables Google Scholar search support
 
-### API Key Issues
-If you encounter errors related to API keys:
-1. Check that you've added the correct keys to `.env.local`
-2. Verify that your API keys are valid and have not expired
-3. Ensure you have sufficient credits on your API provider accounts
+---
 
-### "Invalid API Key" Error
-This typically means one of your API keys is not valid. Check the specific provider mentioned in the error message and update the key in your `.env.local` file.
+## 🧠 Core Features
 
-### Groq API Issues
-If you encounter issues with the Groq API:
-1. Verify your API key is correct in `.env.local`
-2. Check that you have sufficient quota on your Groq account
-3. The system will automatically fall back to Together.ai if Groq is unavailable
+### 🔊 Voice-Powered Agent
 
-## Learn More
+Interact with the assistant using your voice, powered by [Vapi AI](https://www.vapi.ai/), for a seamless spoken research experience.
 
-To learn more about Next.js, take a look at the following resources:
+### 🧩 Multi-Agent Research System
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Uses multiple specialized agents with LangChain to analyze, cross-check, and refine research results from varied sources.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 📊 Expert Comparison Engine
 
-## Deploy on Vercel
+Highlights differences and agreements across AI-generated expert responses, helping you evaluate complex topics critically.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Troubleshooting
+
+### API Key Errors
+
+* Ensure your `.env.local` has the right keys.
+* Check API key validity and quota.
+
+### Groq Fallbacks
+
+* If Groq is down, the system will auto-switch to Together.ai.
+
+---
+
+## 📚 Learn More
+
+* [Next.js Docs](https://nextjs.org/docs)
+* [Next.js Tutorial](https://nextjs.org/learn)
+* [Next.js GitHub](https://github.com/vercel/next.js)
+
+---
+
+## ▲ Deploy on Vercel
+
+Deploy easily using [Vercel](https://vercel.com/new?utm_source=create-next-app&utm_campaign=create-next-app-readme).
+
+---
+
+Let me know if you’d like to include usage examples, UI screenshots, or contribution guidelines too.
