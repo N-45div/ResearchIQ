@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { ChatGroq } from "@langchain/groq";
+import { ChatOpenAI } from "@langchain/openai"; // Changed from ChatGroq
 import { DynamicTool } from "@langchain/core/tools";
 import { BaseMessage, HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { WikipediaQueryRun } from "@langchain/community/tools/wikipedia_query_run";
@@ -26,45 +26,6 @@ if (!global.wikipediaSearchCache) {
 if (!global.googleScholarCache) {
     global.googleScholarCache = new Map<string, string>();
 }
-
-// Initialize Groq model
-const getGroqModel = () => {
-    try {
-        if (!process.env.GROQ_API_KEY) {
-            console.warn("GROQ_API_KEY is not set");
-            return null;
-        }
-
-        return new ChatGroq({
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.2,
-            apiKey: process.env.GROQ_API_KEY,
-        });
-    } catch (error) {
-        console.warn("Error initializing Groq model:", error);
-        return null;
-    }
-};
-
-// Initialize Together.ai model
-const getTogetherModel = () => {
-    try {
-        if (!process.env.TOGETHER_API_KEY) {
-            console.warn("TOGETHER_API_KEY is not set");
-            return null;
-        }
-
-        return new ChatGroq({
-            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-            temperature: 0.2,
-            apiKey: process.env.TOGETHER_API_KEY,
-            baseURL: "https://api.together.xyz/v1",
-        });
-    } catch (error) {
-        console.warn("Error initializing Together.ai model:", error);
-        return null;
-    }
-};
 
 // Tool for searching academic papers via Google Scholar
 const createAcademicSearchTool = () => {
@@ -173,15 +134,36 @@ const safeWebSearch = async (query: string) => {
 };
 
 // Create the research agent using createReactAgent
-const createResearchAgent = async (query: string, messageHistory: any[] = []) => {
+const createResearchAgent = async (
+    query: string,
+    messageHistory: any[] = [],
+    thread_id?: string,
+    isResume?: boolean,
+    resume_payload?: any
+) => {
     try {
-        const groqModel = getGroqModel();
-        const togetherModel = getTogetherModel();
-
-        if (!groqModel && !togetherModel) {
-            throw new Error("No AI models available. Please check your API keys for Groq and Together.ai.");
+        const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+        if (!openrouterApiKey) {
+            console.error("OPENROUTER_API_KEY is not set. Langchain agent will not function correctly.");
+            throw new Error("API configuration error: OpenRouter API key is not set.");
         }
-        const model = groqModel || togetherModel;
+
+        const modelName = "mistralai/mistral-7b-instruct:free"; // Default OpenRouter model
+
+        const llm = new ChatOpenAI({
+            modelName: modelName,
+            openAIApiKey: openrouterApiKey, // Use OpenRouter key here
+            configuration: {
+                baseURL: "https://openrouter.ai/api/v1",
+                // Optional: Add headers if needed and supported by ChatOpenAI's configuration
+                // defaultHeaders: {
+                //   "HTTP-Referer": process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+                //   "X-Title": "Deepest Research - Langchain Agent"
+                // },
+            },
+            temperature: 0.2, // Maintain existing temperature setting
+        });
+        const model = llm; // Use the new llm instance
 
         const wikipediaToolForAgent = new DynamicTool({
             name: "search_wikipedia",
@@ -399,14 +381,15 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Query is required for new conversations' }, { status: 400 });
         }
 
-        if (!process.env.GROQ_API_KEY && !process.env.TOGETHER_API_KEY) {
+        // API Key check updated for OpenRouter
+        if (!process.env.OPENROUTER_API_KEY) {
             return NextResponse.json(
-                { error: 'API configuration error: No AI provider API keys are set.' },
+                { error: 'API configuration error: OpenRouter API key is not set.' },
                 { status: 500 }
             );
         }
 
-        const currentThreadId = thread_id || uuidv4();
+        const currentThreadId = thread_id || uuidv4(); // thread_id is already defined or generated
 
         // Pass necessary params to createResearchAgent
         const result = await createResearchAgent(

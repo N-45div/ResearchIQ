@@ -41,6 +41,7 @@ export default function ChatContent() {
     const [advancedAgentThreadId, setAdvancedAgentThreadId] = useState<string | null>(null);
     const [voiceExpertThreadId, setVoiceExpertThreadId] = useState<string | null>(null);
     const [pendingHumanApproval, setPendingHumanApproval] = useState<boolean>(false);
+    const [isAgentProcessing, setIsAgentProcessing] = useState<boolean>(false); // New state for "Thinking..."
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const { user } = useAuth();
 
@@ -203,7 +204,8 @@ export default function ChatContent() {
 
         setMessages(prev => [...prev, userMessage]);
         setInputValue('');
-        setIsLoading(true);
+        setIsLoading(true); // This can remain for general UI disabling
+        setIsAgentProcessing(true); // Specifically for "Thinking..." message
         setError(null);
 
         try {
@@ -285,7 +287,10 @@ export default function ChatContent() {
                 // };
                 // setMessages(prev => [...prev, genericErrorMessage]);
             }
-            setIsLoading(false);
+            // setIsLoading(false); // isLoading might be set to false by specific logic inside try (e.g. setTimeout)
+        } finally {
+            setIsAgentProcessing(false); // Ensure "Thinking..." is removed
+            // setIsLoading(false); // General loading state reset if not handled by specific success/error paths sooner
         }
     };
 
@@ -293,8 +298,10 @@ export default function ChatContent() {
     const handleHumanInteraction = async (action: string) => {
         if (!currentThreadId) return;
 
-        setIsLoading(true);
+        setIsLoading(true); // For general UI disabling
+        setIsAgentProcessing(true); // For "Thinking..."
         setPendingHumanApproval(false);
+        setError(null); // Clear previous errors
 
         try {
             const response = await fetch('/api/langchain-agent', {
@@ -361,7 +368,13 @@ export default function ChatContent() {
                 const errorMessage = error.response?.data?.error || (error instanceof Error ? error.message : 'An error occurred during human interaction');
                 setError(errorMessage);
             }
-            setIsLoading(false);
+            // setIsLoading(false); // setIsLoading(false) is handled within the setTimeout in the success path
+        } finally {
+            setIsAgentProcessing(false); // Ensure "Thinking..." is removed
+            // If setIsLoading(false) is not guaranteed by all paths in try/catch, add it here too.
+            // However, in this function, it seems like success path handles it.
+            // For robustness, if any path might not set isLoading to false:
+            // setIsLoading(false);
         }
     };
 
@@ -669,7 +682,8 @@ export default function ChatContent() {
                                         </div>
                                     </motion.div>
                                 ))}
-                                {isLoading && (
+                                {/* General loading spinner, distinct from "Thinking..." */}
+                                {isLoading && !isAgentProcessing && ( // Show general spinner if not showing "Thinking..."
                                     <motion.div
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
@@ -679,8 +693,24 @@ export default function ChatContent() {
                                         <div className={styles.loadingBox}>
                                             <IconLoader2 className={styles.loadingIcon} size={18} />
                                             <span>
-                                                Advanced agent is analyzing your query...
+                                                Processing... {/* More generic than "Advanced agent is analyzing..." */}
                                             </span>
+                                        </div>
+                                    </motion.div>
+                                )}
+                                {/* "Thinking..." message */}
+                                {isAgentProcessing && (
+                                    <motion.div
+                                        key="thinking-indicator"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        className={`${styles.messageRow} ${styles.assistantMessageRow}`}
+                                    >
+                                        <div className={`${styles.messageBox} ${styles.assistantMessage} bg-gray-700 animate-pulse`}>
+                                            <div className={styles.messageContent}>
+                                                <p className="text-sm">Thinking...</p>
+                                            </div>
                                         </div>
                                     </motion.div>
                                 )}

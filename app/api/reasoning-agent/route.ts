@@ -24,10 +24,10 @@ const openai = new OpenAI({
 });
 
 // Define the list of new target OpenRouter models
-const openRouterModels = [
-  "mistralai/mistral-7b-instruct:free",
-  "google/gemma-7b-it:free",
-  "meta-llama/llama-3-8b-instruct:free"
+const newOpenRouterModels = [
+  "microsoft/phi-3-medium-128k-instruct:free", // Good for reasoning
+  "qwen/qwen-72b-chat:free",                   // Powerful Qwen model
+  "mistralai/mistral-large-latest:free"        // High-tier Mistral
 ];
 
 // Tool for searching the web via Wikipedia
@@ -136,8 +136,8 @@ Respond with a refined and summarized logical analysis.`;
         // Generate a thread ID for this conversation
         const generatedThreadId = `thread-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 
-        // Select a model (starting with the first one for now)
-        const modelName = openRouterModels[0]; // "mistralai/mistral-7b-instruct:free"
+        // Select a model (defaults to microsoft/phi-3-medium-128k-instruct:free)
+        const modelName = newOpenRouterModels[0];
 
         // Use the Vercel AI SDK to access OpenRouter
         const completion = await openai.chat.completions.create({
