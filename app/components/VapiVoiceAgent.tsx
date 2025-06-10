@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Vapi from '@vapi-ai/web';
+import { useAuth } from '@/app/context/AuthContext'; // Import useAuth
 
 const publicApiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY || '';
 const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID || '';
@@ -29,6 +30,8 @@ export default function VapiVoiceAgent({ onTranscript, centeredMode = false }: V
     const [pulseAnimation, setPulseAnimation] = useState(false);
     const [callSummary, setCallSummary] = useState<string | null>(null);
     const [showSummary, setShowSummary] = useState(false);
+    const { user } = useAuth(); // Get user from AuthContext
+    const callTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer ref
 
     // Track conversation for summary
     const conversationRef = useRef<{ user: string[], assistant: string[] }>({
@@ -146,10 +149,36 @@ export default function VapiVoiceAgent({ onTranscript, centeredMode = false }: V
                 user: [],
                 assistant: []
             };
+
+            // Clear any existing timer
+            if (callTimerRef.current) {
+                clearTimeout(callTimerRef.current);
+                callTimerRef.current = null;
+            }
+
+            // Set new timer based on user auth state
+            const durationLimitSeconds = user ? 300 : 120; // 5 mins for logged-in, 2 mins for anonymous
+            const durationLimitMilliseconds = durationLimitSeconds * 1000;
+            console.log(`Vapi call started. Setting duration limit: ${durationLimitSeconds} seconds`);
+
+            callTimerRef.current = setTimeout(() => {
+                const vapiInstance = vapiRef.current;
+                if (vapiInstance && isConnected) { // Check isConnected state
+                    console.log(`Vapi call duration limit (${durationLimitSeconds}s) reached. Ending call.`);
+                    vapiInstance.stop();
+                    setError(`Call automatically ended after ${durationLimitSeconds / 60} minutes due to time limit.`);
+                }
+            }, durationLimitMilliseconds);
         });
 
         vapi.on('call-end', (reason: any) => {
             console.log('Call ended, reason:', reason);
+            // Clear timer when call ends
+            if (callTimerRef.current) {
+                clearTimeout(callTimerRef.current);
+                callTimerRef.current = null;
+                console.log("Call ended, timer cleared.");
+            }
             setIsConnected(false);
             setIsSpeaking(false);
             setIsListening(false);
@@ -261,8 +290,15 @@ export default function VapiVoiceAgent({ onTranscript, centeredMode = false }: V
                     console.log('Cleanup error on unmount:', e);
                 }
             }
+            // Clear timer on unmount
+            if (callTimerRef.current) {
+                clearTimeout(callTimerRef.current);
+                callTimerRef.current = null;
+                console.log("Component unmounted, timer cleared.");
+            }
         };
-    }, [initializeVapi]);
+    }, [initializeVapi]); // user not needed in dependency array as initializeVapi doesn't depend on it,
+                           // and call-start logic reads fresh user state
 
     const handleReconnect = () => {
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
@@ -342,6 +378,12 @@ export default function VapiVoiceAgent({ onTranscript, centeredMode = false }: V
     };
 
     const handleStop = () => {
+        // Clear timer on manual stop
+        if (callTimerRef.current) {
+            clearTimeout(callTimerRef.current);
+            callTimerRef.current = null;
+            console.log("Manual stop, timer cleared.");
+        }
         if (isConnected && vapiRef.current) {
             try {
                 vapiRef.current.stop();
