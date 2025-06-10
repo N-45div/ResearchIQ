@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { ChatGroq } from "@langchain/groq";
+import { ChatOpenAI } from "@langchain/openai"; // Import ChatOpenAI
 import { createSupervisor } from "@langchain/langgraph-supervisor";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { DynamicTool } from "@langchain/core/tools";
@@ -9,43 +9,21 @@ import { WikipediaQueryRun } from "@langchain/community/tools/wikipedia_query_ru
 import { SERPGoogleScholarAPITool } from "@langchain/community/tools/google_scholar";
 import { z } from 'zod';
 
-// Initialize Groq model
-const getGroqModel = () => {
-    try {
-        if (!process.env.GROQ_API_KEY) {
-            console.warn("GROQ_API_KEY is not set");
-            return null;
-        }
-
-        return new ChatGroq({
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.2,
-            apiKey: process.env.GROQ_API_KEY,
-        });
-    } catch (error) {
-        console.warn("Error initializing Groq model:", error);
-        return null;
-    }
-};
-
-// Initialize Together.ai model with ChatGroq adapter
-const getTogetherModel = () => {
-    try {
-        if (!process.env.TOGETHER_API_KEY) {
-            console.warn("TOGETHER_API_KEY is not set");
-            return null;
-        }
-
-        return new ChatGroq({
-            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
-            temperature: 0.2,
-            apiKey: process.env.TOGETHER_API_KEY,
-            baseURL: "https://api.together.xyz/v1",
-        });
-    } catch (error) {
-        console.warn("Error initializing Together.ai model:", error);
-        return null;
-    }
+// Helper function to create OpenRouter LLM instances
+const createOpenRouterLlm = (modelName: string): ChatOpenAI => {
+  const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterApiKey) {
+    console.error("OPENROUTER_API_KEY is not set. Multi-agent system will fail.");
+    throw new Error("API configuration error: OPENROUTER_API_KEY is not configured.");
+  }
+  return new ChatOpenAI({
+    modelName: modelName,
+    openAIApiKey: openrouterApiKey,
+    configuration: {
+      baseURL: "https://openrouter.ai/api/v1",
+    },
+    temperature: 0.2,
+  });
 };
 
 // Tool for searching Wikipedia
@@ -77,52 +55,32 @@ const createGoogleScholarTool = () => {
 // Create the multi-agent system
 const createMultiAgentSystem = async (query: string) => {
     try {
-        // Check if any model is available
-        const groqModel = getGroqModel();
-        let togetherModel = null;
+        // Initialize LLMs for each agent and supervisor using OpenRouter
+        const llmForWikipedia = createOpenRouterLlm("mistralai/mistral-7b-instruct:free");
+        const llmForScholar = createOpenRouterLlm("mistralai/mistral-7b-instruct:free");
+        const llmForFactChecker = createOpenRouterLlm("microsoft/phi-3-medium-128k-instruct:free");
+        const llmForSynthesizer = createOpenRouterLlm("meta-llama/llama-3-8b-instruct:free");
+        const llmForSupervisor = createOpenRouterLlm("meta-llama/llama-3-8b-instruct:free");
 
-        try {
-            togetherModel = getTogetherModel();
-        } catch (error) {
-            console.warn("Error initializing Together.ai model:", error);
-        }
+        // Create tools for Wikipedia search (remains the same)
+        const wikipediaTool = createWikipediaTool(); // Uses the existing helper
 
-        // If neither model is available, throw an error
-        if (!groqModel && !togetherModel) {
-            throw new Error("No AI models available. Please check your API keys for Groq and Together.ai.");
-        }
+        // Create tool for Google Scholar search (remains the same)
+        const scholarTool = createGoogleScholarTool(); // Uses the existing helper
 
-        // If Groq is not available, use Together.ai for all agents
-        const primaryModel = groqModel || togetherModel;
-
-        // Create tools for Wikipedia search
-        const wikipediaTool = new WikipediaQueryRun({
+        // Ensure tools are correctly defined for the agents
+        const wikipediaSearchTool = new WikipediaQueryRun({
             topKResults: 3,
             maxDocContentLength: 4000,
         });
 
-        // Create tool for Google Scholar search
-        let scholarTool = null;
-        if (process.env.SERPAPI_API_KEY) {
-            scholarTool = new SERPGoogleScholarAPITool({
-                apiKey: process.env.SERPAPI_API_KEY,
-            });
-        } else {
-            scholarTool = new DynamicTool({
-                name: "search_academic_papers",
-                description: "Search for academic papers related to a query",
-                func: async (query: string) => {
-                    return "No academic papers found. API key for Google Scholar is not configured.";
-                },
-            });
-        }
+        // The scholarTool from createGoogleScholarTool() is already a usable tool instance
+        // No need to re-wrap if createGoogleScholarTool() returns SERPGoogleScholarAPITool or DynamicTool
 
         // Create specialized agents for different research tasks
-
-        // Wikipedia researcher agent
         const wikipediaResearcher = createReactAgent({
-            llm: primaryModel,
-            tools: [wikipediaTool],
+            llm: llmForWikipedia,
+            tools: [wikipediaSearchTool], // Pass the specific WikipediaQueryRun instance
             prompt: `You are a specialized research agent focused on finding general knowledge information from Wikipedia.
             
 Your task is to:
@@ -136,10 +94,9 @@ Respond with comprehensive, factual information from Wikipedia.`,
             name: "wikipedia_researcher",
         });
 
-        // Google Scholar researcher agent
         const scholarResearcher = createReactAgent({
-            llm: togetherModel || primaryModel,
-            tools: [scholarTool],
+            llm: llmForScholar,
+            tools: [scholarTool], // Pass the tool instance from createGoogleScholarTool()
             prompt: `You are a specialized research agent focused on finding academic information from scholarly sources.
             
 Your task is to:
@@ -153,10 +110,9 @@ Respond with rigorous, academic information with proper citations.`,
             name: "scholar_researcher",
         });
 
-        // Fact checker agent
         const factChecker = createReactAgent({
-            llm: primaryModel,
-            tools: [],
+            llm: llmForFactChecker,
+            tools: [], // Fact checker might not need tools, or could have specific validation tools
             prompt: `You are a specialized fact-checking agent with critical thinking abilities.
             
 Your task is to:
@@ -170,10 +126,9 @@ Focus specifically on finding contradictions and differences between sources.`,
             name: "fact_checker",
         });
 
-        // Synthesizer agent
         const synthesizer = createReactAgent({
-            llm: primaryModel,
-            tools: [],
+            llm: llmForSynthesizer,
+            tools: [], // Synthesizer typically works on provided text
             prompt: `You are a specialized synthesis agent that creates comprehensive answers from multiple sources.
             
 Your task is to:
@@ -190,7 +145,7 @@ Your final answer should clearly indicate when different sources provide conflic
         // Create the supervisor to coordinate the agents
         const supervisor = createSupervisor({
             agents: [wikipediaResearcher, scholarResearcher, factChecker, synthesizer],
-            llm: primaryModel,
+            llm: llmForSupervisor,
             prompt: `You are a research supervisor coordinating a team of specialized agents to answer a research query.
 
 Your team consists of:
@@ -235,10 +190,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Query is required' }, { status: 400 });
         }
 
-        // Check if required API keys are set
-        if (!process.env.GROQ_API_KEY && !process.env.TOGETHER_API_KEY) {
+        // Check if required API key is set (OpenRouter)
+        if (!process.env.OPENROUTER_API_KEY) {
             return NextResponse.json(
-                { error: 'API configuration error: No AI provider API keys are set. Please set either GROQ_API_KEY or TOGETHER_API_KEY in your environment variables.' },
+                { error: 'API configuration error: OPENROUTER_API_KEY is not set.' },
                 { status: 500 }
             );
         }
