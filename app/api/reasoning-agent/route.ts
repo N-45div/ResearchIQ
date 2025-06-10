@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import OpenAI from '@ai-sdk/openai'; // Vercel AI SDK
 import { WikipediaQueryRun } from '@langchain/community/tools/wikipedia_query_run';
 
 // Add TypeScript declaration for global variable
@@ -14,15 +14,21 @@ if (!global.wikipediaSearchCache) {
     global.wikipediaSearchCache = new Map<string, string>();
 }
 
-// Initialize OpenRouter using OpenAI compatibility
+// Initialize OpenRouter using OpenAI compatibility with Vercel AI SDK
 const openai = new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY || '',
     baseURL: 'https://openrouter.ai/api/v1',
-    defaultHeaders: {
-        'HTTP-Referer': process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
-        'X-Title': 'Deepest Research'
-    }
+    // Headers like HTTP-Referer are typically managed by the SDK or underlying fetch.
+    // If specific headers are needed per request, they can be added to the .create call.
+    // For OpenRouter, an X-Title header isn't standard for their API itself.
 });
+
+// Define the list of new target OpenRouter models
+const openRouterModels = [
+  "mistralai/mistral-7b-instruct:free",
+  "google/gemma-7b-it:free",
+  "meta-llama/llama-3-8b-instruct:free"
+];
 
 // Tool for searching the web via Wikipedia
 const createWebSearchTool = () => {
@@ -104,25 +110,25 @@ export async function POST(req: NextRequest) {
             context += "Wikipedia search results could not be retrieved. Proceeding with available information.\n\n";
         }
 
-        // Create a system prompt that includes context and instructions for reasoning
-        const systemPrompt = `You are an advanced reasoning agent that helps users with logical analysis and critical thinking.
-        
-Your task is to:
-1. Analyze the query thoroughly using logical reasoning
-2. Break down complex problems into smaller parts
-3. Identify logical fallacies and reasoning errors
-4. Provide step-by-step logical analysis
-5. Draw well-supported conclusions based on available evidence
+        // New System Prompt
+        const systemPromptContent = `You are an advanced reasoning agent. Your goal is to provide clear, concise, and well-summarized logical analyses.
 
-Here is some context that may help with your reasoning:
-${context}
+Context for your reasoning:
+${context || "No additional context provided."}
 
-Think carefully and reason step by step to provide a comprehensive, logical answer.`;
+Please adhere to the following guidelines:
+1.  **Summarize Key Findings:** Do not provide lengthy explanations unless absolutely necessary. Focus on a summarized version of the logical steps and conclusions.
+2.  **Clarity and Precision:** Use precise language. Avoid ambiguity.
+3.  **Step-by-Step (Brief):** Briefly outline the main steps in your reasoning, but keep it high-level.
+4.  **Direct Answer:** Provide a direct and synthesized answer to the query based on your reasoning.
+5.  **Logical Soundness:** Ensure all conclusions are logically sound and well-supported by the provided context or general knowledge.
+
+Respond with a refined and summarized logical analysis.`;
 
         // Format previous messages for context if available
         const formattedMessages = messages?.length > 0
-            ? messages.map((msg: any) => ({
-                role: msg.role,
+            ? messages.slice(-5).map((msg: any) => ({ // Keep last 5 messages for context
+                role: msg.role === 'assistant' ? 'assistant' : 'user', // Ensure role is 'user' or 'assistant'
                 content: msg.content
             }))
             : [];
@@ -130,19 +136,23 @@ Think carefully and reason step by step to provide a comprehensive, logical answ
         // Generate a thread ID for this conversation
         const generatedThreadId = `thread-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 
-        // Use one of OpenRouter's free reasoning models
-        // Options: "microsoft/phi-4-reasoning-plus:free", "qwen/qwen3-30b-a3b:free", "nvidia/llama-3.1-nemotron-ultra-253b:free"
-        const modelName = "microsoft/phi-4-reasoning-plus:free";
+        // Select a model (starting with the first one for now)
+        const modelName = openRouterModels[0]; // "mistralai/mistral-7b-instruct:free"
 
-        // Use the OpenAI compatibility layer to access OpenRouter
+        // Use the Vercel AI SDK to access OpenRouter
         const completion = await openai.chat.completions.create({
             model: modelName,
             messages: [
-                { role: "system", content: systemPrompt },
-                ...formattedMessages,
-                { role: "user", content: query }
+                { role: "system", content: systemPromptContent },
+                ...formattedMessages, // Add user's previous messages if any
+                { role: "user", content: query } // Current user query
             ],
-            temperature: 0.7,
+            temperature: 0.7, // Adjust temperature as needed
+            // The Vercel SDK's OpenAI provider typically doesn't need response_format for standard chat.
+            // If specific headers like HTTP-Referer are strictly needed and not automatically handled,
+            // they might be passed via `fetchOptions` in the OpenAI client constructor if supported,
+            // or directly in the `create` call if the SDK allows.
+            // For now, relying on standard behavior.
         });
 
         // Record tool calls for demonstration
