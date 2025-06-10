@@ -133,14 +133,24 @@ const safeWebSearch = async (query: string) => {
     }
 };
 
-// Create the research agent using createReactAgent
-const createResearchAgent = async (
+// Define a type for the structured return of the research worker
+type ResearchWorkerOutput = {
+    status: 'completed' | 'interrupted' | 'error';
+    message?: string; // Used for completed answer or error message
+    thread_id: string;
+    interrupt_data?: any;
+    provider?: string;
+};
+
+// Internal function containing the core agent logic
+async function _executeResearchAgent(
     query: string,
     messageHistory: any[] = [],
-    thread_id?: string,
+    thread_id_input?: string,
     isResume?: boolean,
     resume_payload?: any
-) => {
+): Promise<ResearchWorkerOutput> {
+    const current_thread_id = thread_id_input || uuidv4();
     try {
         const openrouterApiKey = process.env.OPENROUTER_API_KEY;
         if (!openrouterApiKey) {
@@ -152,18 +162,13 @@ const createResearchAgent = async (
 
         const llm = new ChatOpenAI({
             modelName: modelName,
-            openAIApiKey: openrouterApiKey, // Use OpenRouter key here
+            openAIApiKey: openrouterApiKey,
             configuration: {
                 baseURL: "https://openrouter.ai/api/v1",
-                // Optional: Add headers if needed and supported by ChatOpenAI's configuration
-                // defaultHeaders: {
-                //   "HTTP-Referer": process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
-                //   "X-Title": "Deepest Research - Langchain Agent"
-                // },
             },
-            temperature: 0.2, // Maintain existing temperature setting
+            temperature: 0.2,
         });
-        const model = llm; // Use the new llm instance
+        const model = llm;
 
         const wikipediaToolForAgent = new DynamicTool({
             name: "search_wikipedia",
@@ -362,26 +367,79 @@ Please provide the final answer directly without explaining your internal though
         console.error("Error in ReAct research agent:", error);
         // Ensure the return type matches what POST handler expects, even for errors.
         // This specific error is from within createResearchAgent, not an HTTP error.
-        // Let the POST handler deal with HTTP response.
-        throw error; // Re-throw to be caught by POST handler's try-catch
+        throw error;
     }
-};
+}
+
+// Exportable worker function
+export async function invokeResearchWorker(input: {
+    query: string,
+    messages?: BaseMessage[],
+    thread_id?: string,
+    resume_payload?: any,
+    isResume?: boolean
+}): Promise<ResearchWorkerOutput> {
+    const { query, messages = [], thread_id, resume_payload, isResume = false } = input;
+    const workerThreadId = thread_id || uuidv4(); // Use provided or generate new
+
+    try {
+        // API key check should be done before calling _executeResearchAgent or inside it early.
+        // _executeResearchAgent already throws if OPENROUTER_API_KEY is not set.
+
+        const result = await _executeResearchAgent(
+            query,
+            messages,
+            workerThreadId,
+            isResume,
+            resume_payload
+        );
+
+        // Adapt the result from _executeResearchAgent to ResearchWorkerOutput
+        if (result.type === "interrupted") {
+            return {
+                status: 'interrupted',
+                thread_id: result.thread_id,
+                interrupt_data: result.interrupt_data,
+                provider: 'LangGraph ReAct Agent (HITL)'
+            };
+        } else if (result.type === "completed") {
+            return {
+                status: 'completed',
+                message: result.answer,
+                thread_id: result.thread_id,
+                provider: 'LangGraph ReAct Agent (HITL)'
+            };
+        }
+        // This case should ideally not be reached if _executeResearchAgent is robust.
+        console.error("invokeResearchWorker: Unknown result type from _executeResearchAgent", result);
+        return {
+            status: 'error',
+            message: 'Unknown error or result type from agent execution.',
+            thread_id: workerThreadId,
+            provider: 'LangGraph ReAct Agent (HITL)'
+        };
+
+    } catch (error: any) {
+        console.error('invokeResearchWorker: Error during agent execution:', error);
+        return {
+            status: 'error',
+            message: error.message || 'An unexpected error occurred in the research worker.',
+            thread_id: workerThreadId,
+            provider: 'LangGraph ReAct Agent (HITL)'
+        };
+    }
+}
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         const { query, messages, thread_id, resume_payload } = body;
 
-        // For this subtask, we are not fully implementing resume.
-        // We're focusing on making the agent interruptible.
-        // We'll assume new conversations for now if no thread_id for resume is passed.
-        const isResume = !!(thread_id && resume_payload);
+        const isResume = !!(thread_id && resume_payload !== undefined); // resume_payload can be null
 
-        if (!isResume && !query) { // Query is required for new conversations
+        if (!isResume && !query) {
             return NextResponse.json({ error: 'Query is required for new conversations' }, { status: 400 });
         }
-
-        // API Key check updated for OpenRouter
         if (!process.env.OPENROUTER_API_KEY) {
             return NextResponse.json(
                 { error: 'API configuration error: OpenRouter API key is not set.' },
@@ -389,38 +447,38 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const currentThreadId = thread_id || uuidv4(); // thread_id is already defined or generated
+        const workerInput = {
+            query: query || "", // query can be empty for resume, but worker might need it based on design
+            messages: messages || [],
+            thread_id: thread_id, // Pass along; invokeResearchWorker will generate if null/undefined
+            resume_payload: resume_payload,
+            isResume: isResume
+        };
 
-        // Pass necessary params to createResearchAgent
-        const result = await createResearchAgent(
-            query, // Query for new conversations
-            messages || [],
-            currentThreadId,
-            isResume,
-            resume_payload
-        );
+        const result = await invokeResearchWorker(workerInput);
 
-        if (result.type === "interrupted") {
+        if (result.status === "interrupted") {
             return NextResponse.json({
-                type: "interrupted",
+                type: "interrupted", // Keep 'type' for client compatibility if needed, or switch to 'status'
                 thread_id: result.thread_id,
-                interrupt_data: result.interrupt_data, // Data from the interrupt() call
-                provider: 'LangGraph ReAct Agent (HITL)'
+                interrupt_data: result.interrupt_data,
+                provider: result.provider
             });
-        } else if (result.type === "completed") {
+        } else if (result.status === "completed") {
             return NextResponse.json({
-                text: result.answer,
-                provider: 'LangGraph ReAct Agent (HITL)',
+                text: result.message, // 'text' for client compatibility
+                provider: result.provider,
                 thread_id: result.thread_id
             });
-        } else {
-            // Should not happen if createResearchAgent always returns one of the two types
-            console.error("Unknown result type from createResearchAgent:", result);
-            return NextResponse.json({ error: 'Internal server error: Unexpected agent response.' }, { status: 500 });
+        } else { // status === 'error'
+            return NextResponse.json({
+                error: result.message,
+                thread_id: result.thread_id
+            }, { status: 500 });
         }
 
     } catch (error: any) {
-        console.error('LangChain ReAct Agent API error (HITL):', error);
+        console.error('LangChain Agent API POST Error:', error);
         return NextResponse.json(
             { error: 'Internal server error: ' + (error instanceof Error ? error.message : String(error)) },
             { status: 500 }

@@ -38,11 +38,13 @@ export default function ChatContent() {
     const [agentMode, setAgentMode] = useState<AgentMode>('advanced-agent');
     const [usageInfo, setUsageInfo] = useState<UsageInfo | null>(null);
     const [showUsagePopup, setShowUsagePopup] = useState(false);
-    const [advancedAgentThreadId, setAdvancedAgentThreadId] = useState<string | null>(null);
-    const [voiceExpertThreadId, setVoiceExpertThreadId] = useState<string | null>(null);
-    const [pendingHumanApproval, setPendingHumanApproval] = useState<boolean>(false);
-    const [isAgentProcessing, setIsAgentProcessing] = useState<boolean>(false); // New state for "Thinking..."
+    // const [advancedAgentThreadId, setAdvancedAgentThreadId] = useState<string | null>(null); // Replaced by supervisorThreadId for this mode
+    const [voiceExpertThreadId, setVoiceExpertThreadId] = useState<string | null>(null); // Keep for voicexpert if it has its own threads
+    // const [pendingHumanApproval, setPendingHumanApproval] = useState<boolean>(false); // Replaced by currentInterruptionData
+    const [isAgentProcessing, setIsAgentProcessing] = useState<boolean>(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [supervisorThreadId, setSupervisorThreadId] = useState<string | null>(null);
+    const [currentInterruptionData, setCurrentInterruptionData] = useState<any | null>(null);
     const { user } = useAuth();
 
     // Get current messages based on active mode
@@ -55,13 +57,17 @@ export default function ChatContent() {
         : setVoiceExpertMessages;
 
     // Get current thread ID based on active mode
-    const currentThreadId = agentMode === 'advanced-agent'
-        ? advancedAgentThreadId
-        : voiceExpertThreadId;
+    // For advanced-agent, supervisorThreadId is now the primary thread ID.
+    // currentThreadId and setCurrentThreadId might be deprecated or used differently if langChainAgent is still used.
+    // For this refactor, focusing on supervisor, so advancedAgentThreadId is less relevant.
+    // const currentThreadId = agentMode === 'advanced-agent'
+    //     ? supervisorThreadId // Use supervisorThreadId when in advanced-agent mode
+    //     : voiceExpertThreadId;
 
-    const setCurrentThreadId = agentMode === 'advanced-agent'
-        ? setAdvancedAgentThreadId
-        : setVoiceExpertThreadId;
+    // const setCurrentThreadId = agentMode === 'advanced-agent'
+    //     ? setSupervisorThreadId
+    //     : setVoiceExpertThreadId;
+
 
     // Scroll to bottom whenever messages change
     useEffect(() => {
@@ -78,84 +84,6 @@ export default function ChatContent() {
             return () => clearTimeout(timer);
         }
     }, [usageInfo]);
-
-    const fetchLangChainAgentResults = async (query: string) => {
-        try {
-            // Get previous messages for context
-            const previousMessages = messages.map(msg => ({
-                role: msg.role,
-                content: msg.content
-            }));
-
-            const response = await fetch('/api/langchain-agent', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    query,
-                    messages: previousMessages,
-                    threadId: currentThreadId
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                const customError: any = new Error(errorData.error || 'Failed to get advanced agent results');
-                customError.response = { status: response.status, data: errorData };
-                throw customError;
-            }
-
-            const data = await response.json();
-            // Usage info is now handled by middleware in case of 429, not in successful responses.
-            if (data.threadId) {
-                setCurrentThreadId(data.threadId);
-            }
-            return data;
-        } catch (error) {
-            console.error('Error fetching LangChain agent results:', error);
-            throw error;
-        }
-    };
-
-    const fetchReasoningAgentResults = async (query: string) => {
-        try {
-            // Get previous messages for context
-            const previousMessages = messages.map(msg => ({
-                role: msg.role,
-                content: msg.content
-            }));
-
-            const response = await fetch('/api/reasoning-agent', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    query,
-                    messages: previousMessages,
-                    threadId: currentThreadId
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                const customError: any = new Error(errorData.error || 'Failed to get reasoning agent results');
-                customError.response = { status: response.status, data: errorData };
-                throw customError;
-            }
-
-            const data = await response.json();
-            // Usage info is now handled by middleware in case of 429, not in successful responses.
-            if (data.threadId) {
-                setCurrentThreadId(data.threadId);
-            }
-            return data;
-        } catch (error) {
-            console.error('Error fetching reasoning agent results:', error);
-            throw error;
-        }
-    };
 
     const fetchMultiAgentResults = async (query: string) => {
         try {
@@ -204,49 +132,83 @@ export default function ChatContent() {
 
         setMessages(prev => [...prev, userMessage]);
         setInputValue('');
-        setIsLoading(true); // This can remain for general UI disabling
-        setIsAgentProcessing(true); // Specifically for "Thinking..." message
+        setIsLoading(true);
+        setIsAgentProcessing(true);
         setError(null);
 
         try {
             if (agentMode === 'advanced-agent') {
-                // Determine if we should use reasoning agent based on query complexity
-                // Keywords that might indicate need for logical reasoning
-                const reasoningKeywords = [
-                    'reasoning', 'logic', 'analyze', 'fallacy', 'argument', 'evaluate',
-                    'critical thinking', 'contradiction', 'syllogism', 'premise', 'conclusion',
-                    'inference', 'deduction', 'induction', 'valid', 'invalid', 'sound', 'unsound',
-                    'why', 'how', 'explain', 'compare', 'contrast', 'evaluate', 'assess'
-                ];
+                let payload;
+                const MAX_HISTORY_MESSAGES = 5; // Max number of recent messages to send
 
-                // Check if query contains reasoning keywords
-                const needsReasoning = reasoningKeywords.some(keyword =>
-                    userMessage.content.toLowerCase().includes(keyword.toLowerCase())
-                );
+                const historyForSupervisor = messages
+                    .slice(-MAX_HISTORY_MESSAGES)
+                    .map(msg => ({ role: msg.role, content: msg.content }));
 
-                // Use either the reasoning agent or standard LangChain agent
-                const results = needsReasoning
-                    ? await fetchReasoningAgentResults(userMessage.content)
-                    : await fetchLangChainAgentResults(userMessage.content);
 
-                // Check if the response requires human approval
-                const needsHumanApproval = results.text.includes('Please review this action before proceeding:');
+                if (currentInterruptionData) {
+                    // This is a resume request for an interrupted task
+                    console.log("Resuming supervisor with payload:", userMessage.content, "Thread ID:", supervisorThreadId);
+                    payload = {
+                        thread_id: supervisorThreadId, // Must have supervisorThreadId from interruption
+                        resume_payload: userMessage.content, // User's input is the resume_payload
+                    };
+                } else {
+                    // This is an initial request or a new query after completion
+                    console.log("Sending new query to supervisor. Query:", userMessage.content, "Thread ID:", supervisorThreadId);
+                    payload = {
+                        query: userMessage.content,
+                        messages: historyForSupervisor,
+                        thread_id: supervisorThreadId, // Send existing supervisorThreadId if any, else backend generates
+                    };
+                }
 
-                setTimeout(() => {
-                    setMessages(prev => [...prev, {
-                        id: `agent-${Date.now()}`,
+                const response = await fetch('/api/advanced-supervisor', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    const customError: any = new Error(errorData.error || 'Failed to get response from supervisor');
+                    customError.response = { status: response.status, data: errorData };
+                    throw customError;
+                }
+
+                const data = await response.json();
+                console.log("Supervisor response data:", data);
+
+                if (data.thread_id) {
+                    setSupervisorThreadId(data.thread_id);
+                }
+
+                if (data.type === "interrupted") {
+                    setCurrentInterruptionData(data.interrupt_data);
+                    const interruptMessageContent = `Supervisor: Action [${data.interrupt_data?.tool_name || 'Unknown Tool'}] proposed with query: "${data.interrupt_data?.proposed_query || 'No query proposed'}". Please provide the query to use, or type your modification/approval. Type 'reject' to deny.`;
+                    const interruptDisplayMessage: Message = {
+                        id: `assistant-interrupt-${Date.now()}`,
                         role: 'assistant',
-                        content: results.text,
-                        provider: needsReasoning ? 'Advanced Agent (Reasoning)' : 'Advanced Agent (Research)',
-                        toolCalls: results.toolCalls,
-                        threadId: results.threadId,
-                        pendingHumanApproval: needsHumanApproval
-                    }]);
-                    setPendingHumanApproval(needsHumanApproval);
+                        content: interruptMessageContent,
+                        provider: data.provider || 'Supervisor (HITL)',
+                    };
+                    setMessages(prevMessages => [...prevMessages, interruptDisplayMessage]);
+                    setIsLoading(false); // Stop general loading, wait for human input
+                } else { // Completed or other final state
+                    setCurrentInterruptionData(null); // Clear any previous interruption
+                    const finalAssistantMessage: Message = {
+                        id: `assistant-${Date.now()}`,
+                        role: 'assistant',
+                        content: data.text || "Task completed.",
+                        provider: data.provider || 'Advanced Supervisor',
+                        toolCalls: data.toolCalls, // If supervisor provides this
+                        // threadId: data.thread_id, // This is supervisor's thread_id, already set
+                    };
+                    setMessages(prevMessages => [...prevMessages, finalAssistantMessage]);
                     setIsLoading(false);
-                }, 500);
+                }
+
             } else if (agentMode === 'voicexpert') {
-                // Use the multi-agent API for the VoiceXpert mode
                 const multiAgentResults = await fetchMultiAgentResults(userMessage.content);
 
                 setTimeout(() => {
@@ -257,104 +219,15 @@ export default function ChatContent() {
                         provider: 'VoiceXpert Comparison System',
                         toolCalls: multiAgentResults.toolCalls
                     }]);
-                    setIsLoading(false);
+                    setIsLoading(false); // Ensure loading is false after multi-agent call
                 }, 500);
             }
         } catch (error: any) {
+            // Common error handling for all agent modes
             if (error.response?.status === 429 && error.response?.data?.isLimited) {
                 const limitMessageContent = user
                     ? "You have reached your request limit for this period."
                     : "You've reached your free request limit. Please [sign in](/auth/signin) to continue.";
-
-                const rateLimitMessage: Message = {
-                    id: `error-${Date.now()}`,
-                    role: 'assistant', // Or 'system' or a new role 'error'
-                    content: limitMessageContent,
-                    provider: 'System'
-                };
-                setMessages(prev => [...prev, rateLimitMessage]);
-                setError(null); // Clear generic error if it's a rate limit error
-            } else {
-                console.error('Error in research:', error);
-                const errorMessage = error.response?.data?.error || (error instanceof Error ? error.message : 'An error occurred during research');
-                setError(errorMessage);
-                // Optionally add a generic error message to chat
-                // const genericErrorMessage: Message = {
-                //     id: `error-${Date.now()}`,
-                //     role: 'assistant',
-                //     content: errorMessage,
-                //     provider: 'System Error'
-                // };
-                // setMessages(prev => [...prev, genericErrorMessage]);
-            }
-            // setIsLoading(false); // isLoading might be set to false by specific logic inside try (e.g. setTimeout)
-        } finally {
-            setIsAgentProcessing(false); // Ensure "Thinking..." is removed
-            // setIsLoading(false); // General loading state reset if not handled by specific success/error paths sooner
-        }
-    };
-
-    // Handle human-in-the-loop interaction
-    const handleHumanInteraction = async (action: string) => {
-        if (!currentThreadId) return;
-
-        setIsLoading(true); // For general UI disabling
-        setIsAgentProcessing(true); // For "Thinking..."
-        setPendingHumanApproval(false);
-        setError(null); // Clear previous errors
-
-        try {
-            const response = await fetch('/api/langchain-agent', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    threadId: currentThreadId,
-                    command: { type: action }
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                const customError: any = new Error(errorData.error || 'Failed to process human interaction');
-                customError.response = { status: response.status, data: errorData };
-                throw customError;
-            }
-
-            const data = await response.json();
-
-            // Add human action message
-            setMessages(prev => [...prev, {
-                id: `human-${Date.now()}`,
-                role: 'human',
-                content: `Human ${action === 'accept' ? 'approved' : 'rejected'} the action.`,
-                provider: 'Human-in-the-loop',
-            }]);
-
-            // Add the response to messages
-            setTimeout(() => {
-                setMessages(prev => [...prev, {
-                    id: `interaction-${Date.now()}`,
-                    role: 'assistant',
-                    content: data.text,
-                    provider: 'LangChain Research Agent',
-                    threadId: data.threadId
-                }]);
-                setIsLoading(false);
-
-                // Update thread ID if a new one was returned
-                if (data.threadId) {
-                    setCurrentThreadId(data.threadId);
-                }
-            }, 500);
-
-        } catch (error: any) {
-            if (error.response?.status === 429 && error.response?.data?.isLimited) {
-                const limitMessageContent = user
-                    ? "You have reached your request limit for this period."
-                    : "You've reached your free request limit. Please [sign in](/auth/signin) to continue.";
-
                 const rateLimitMessage: Message = {
                     id: `error-${Date.now()}`,
                     role: 'assistant',
@@ -364,17 +237,14 @@ export default function ChatContent() {
                 setMessages(prev => [...prev, rateLimitMessage]);
                 setError(null);
             } else {
-                console.error('Error in human interaction:', error);
-                const errorMessage = error.response?.data?.error || (error instanceof Error ? error.message : 'An error occurred during human interaction');
+                const generalErrorMessage = agentMode === 'advanced-agent' ? 'Error interacting with supervisor' : 'Error in research';
+                console.error(generalErrorMessage + ':', error);
+                const errorMessage = error.response?.data?.error || (error instanceof Error ? error.message : `An error occurred during ${agentMode} processing`);
                 setError(errorMessage);
             }
-            // setIsLoading(false); // setIsLoading(false) is handled within the setTimeout in the success path
+            setIsLoading(false); // Ensure loading is false on error
         } finally {
-            setIsAgentProcessing(false); // Ensure "Thinking..." is removed
-            // If setIsLoading(false) is not guaranteed by all paths in try/catch, add it here too.
-            // However, in this function, it seems like success path handles it.
-            // For robustness, if any path might not set isLoading to false:
-            // setIsLoading(false);
+            setIsAgentProcessing(false);
         }
     };
 
@@ -448,41 +318,17 @@ export default function ChatContent() {
         );
     };
 
-    // Render human-in-the-loop approval buttons if needed
-    const renderHumanApprovalButtons = (message: Message) => {
-        if (!message.pendingHumanApproval) {
-            return null;
-        }
-
-        return (
-            <div className={styles.humanApprovalContainer}>
-                <button
-                    onClick={() => handleHumanInteraction('accept')}
-                    className={styles.approveButton}
-                >
-                    <IconUserCheck size={16} />
-                    Approve
-                </button>
-                <button
-                    onClick={() => handleHumanInteraction('reject')}
-                    className={styles.rejectButton}
-                >
-                    <IconX size={16} />
-                    Reject
-                </button>
-            </div>
-        );
-    };
-
     // Update the mode toggle handler
     const handleModeToggle = (mode: AgentMode) => {
-        // Don't do anything if we're already in this mode
         if (mode === agentMode) return;
 
         setAgentMode(mode);
         setError(null);
-        setPendingHumanApproval(false);
+        // Clear HITL state when switching modes
+        setCurrentInterruptionData(null);
+        // setSupervisorThreadId(null); // Optionally reset supervisor thread on mode switch
         setIsLoading(false);
+        setIsAgentProcessing(false);
     };
 
     return (
@@ -678,9 +524,10 @@ export default function ChatContent() {
                                                 </div>
                                             )}
                                             {message.toolCalls && renderToolCalls(message.toolCalls)}
-                                            {renderHumanApprovalButtons(message)}
+                                            {/* renderHumanApprovalButtons removed as HITL prompt is now a message */}
                                         </div>
-                                    </motion.div>
+                                    </motion.div
+                                    >
                                 ))}
                                 {/* General loading spinner, distinct from "Thinking..." */}
                                 {isLoading && !isAgentProcessing && ( // Show general spinner if not showing "Thinking..."
@@ -744,24 +591,27 @@ export default function ChatContent() {
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 placeholder="Ask the advanced multi-agent system..."
-                                disabled={isLoading || pendingHumanApproval}
+                                disabled={isLoading || !!currentInterruptionData} // Disable input if loading or waiting for HITL response
                                 className={styles.input}
                             />
                             <button
                                 type="submit"
-                                disabled={isLoading || !inputValue.trim() || pendingHumanApproval}
+                                disabled={isLoading || !inputValue.trim() || (agentMode === 'advanced-agent' && !!currentInterruptionData && !inputValue.trim())}
                                 className={styles.sendButton}
                             >
                                 <IconSend size={20} />
                             </button>
                         </form>
                         <div className={styles.inputStatus}>
-                            {pendingHumanApproval ? (
-                                <span className={styles.pendingApprovalText}>Human approval required before continuing</span>
+                            {agentMode === 'advanced-agent' && currentInterruptionData ? (
+                                <span className={styles.pendingApprovalText}>
+                                    Human input required for: {currentInterruptionData.tool_name || 'task'}.
+                                    Proposed: "{currentInterruptionData.proposed_query?.substring(0, 50) || 'N/A'}{currentInterruptionData.proposed_query?.length > 50 ? "..." : ""}"
+                                </span>
                             ) : !user ? (
-                                <span>You have 3 research requests available</span>
+                                <span>You have limited free requests available.</span>
                             ) : (
-                                <span>Your research is being saved automatically</span>
+                                <span>Research context is maintained per session.</span>
                             )}
                         </div>
                     </div>
