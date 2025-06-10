@@ -45,7 +45,7 @@ export default function ChatContent() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [supervisorThreadId, setSupervisorThreadId] = useState<string | null>(null);
     const [currentInterruptionData, setCurrentInterruptionData] = useState<any | null>(null);
-    const { user, isLoading: isAuthLoading } = useAuth(); // Added isAuthLoading
+    const { user, isLoading: isAuthLoading } = useAuth();
 
     // Persistence states
     const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -79,12 +79,12 @@ export default function ChatContent() {
     // Import uuid for client-side ID generation
     // NOTE: This would typically be an import at the top of the file.
     // For this environment, we'll assume v4 is available if used.
-    // import { v4 as uuidv4 } from 'uuid';
+    const { v4: uuidv4 } = require('uuid'); // Using require for this environment if import is tricky at top level after initial load
 
 
     // Scroll to bottom whenever messages change
     useEffect(() => {
-        if (agentMode === 'advanced-agent' && messages.length > 0) { // Only scroll if there are messages
+        if (agentMode === 'advanced-agent' && messages.length > 0) {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, agentMode]);
@@ -274,60 +274,55 @@ export default function ChatContent() {
         e.preventDefault();
         if (!inputValue.trim() || isLoading) return;
 
-        const userMessage: Message = {
+        const userInputContent = inputValue.trim();
+        const localUserMessage: Message = { // Message for local UI
             id: Date.now().toString(),
             role: 'user',
-            content: inputValue.trim()
+            content: userInputContent
         };
 
-        setMessages(prev => [...prev, userMessage]);
+        // Optimistic UI update for user message
+        if (agentMode === 'advanced-agent') {
+            setAdvancedAgentMessages(prev => [...prev, localUserMessage]);
+        } else if (agentMode === 'voicexpert') {
+            // VoiceXpert might not show user messages in the same list,
+            // but if it did, it would be: setVoiceExpertMessages(prev => [...prev, localUserMessage]);
+            // For now, assuming VoiceXpert doesn't use this messages list for user input.
+        }
         setInputValue('');
+
         setIsLoading(true);
         setIsAgentProcessing(true);
         setError(null);
-        setSaveError(null); // Clear save error on new submission
+        setSaveError(null);
 
-        // Determine conversation ID for saving
-        let convIdToUse = currentConversationId;
-        let isNewConversation = false;
-        if (agentMode === 'advanced-agent' && !convIdToUse && !currentInterruptionData) {
-            // Only generate new conv ID for advanced-agent if it's a truly new chat
-            // and not resuming an interruption for a potentially already saved conversation.
-            // If currentInterruptionData is present, supervisorThreadId should already be set from a previous interaction.
-            convIdToUse = uuidv4();
-            setCurrentConversationId(convIdToUse); // Set it for subsequent saves in this interaction
-            isNewConversation = true;
-            console.log("Generated new conversation ID:", convIdToUse);
+        let convIdToSave = currentConversationId;
+        if (agentMode === 'advanced-agent' && !convIdToSave && !currentInterruptionData) {
+            convIdToSave = uuidv4();
+            setCurrentConversationId(convIdToSave);
+            console.log("Generated new conversation ID for save:", convIdToSave);
         }
 
-
-        // Save user message
-        // Note: messages state (aliased to advancedAgentMessages) has not been updated with userMessage yet at this point.
-        if (agentMode === 'advanced-agent' && convIdToUse && user) {
+        // Save user message to DB
+        if (agentMode === 'advanced-agent' && convIdToSave && user) {
             const userMessageForApi = {
-                role: userMessage.role,
-                content: userMessage.content,
-                provider: 'user', // Or derive from userMessage if it has a provider field
-                message_order: advancedAgentMessages.length, // Order before adding current userMessage
-                // id: userMessage.id, // Not needed for DB, DB generates its own PK
-                threadId: null, // User messages don't originate from an agent's thread_id
+                role: localUserMessage.role,
+                content: localUserMessage.content,
+                provider: 'user',
+                message_order: advancedAgentMessages.length -1, // Index of the message just added
             };
-            // Not awaiting this to make UI appear faster. Error will be shown via saveError state.
-            saveMessagesToDb([userMessageForApi], convIdToUse);
+            saveMessagesToDb([userMessageForApi], convIdToSave);
         }
-
-        // UI update happens before API call logic for advanced-agent
-        setMessages(prev => [...prev, userMessage]);
-        setInputValue('');
-
 
         try {
             if (agentMode === 'advanced-agent') {
                 let payload;
-                const MAX_HISTORY_MESSAGES = 5;
+                const MAX_HISTORY_MESSAGES = 10; // Increase history for supervisor
 
-                // History for supervisor should be from the state *before* the current userMessage was added
+                // History for supervisor should be from advancedAgentMessages *before* the current localUserMessage was added for this turn,
+                // but since we updated state optimistically, we slice before the last one.
                 const historyForSupervisor = advancedAgentMessages
+                    .slice(0, -1) // Exclude the optimistically added user message
                     .slice(-MAX_HISTORY_MESSAGES)
                     .map(msg => ({ role: msg.role, content: msg.content }));
 
@@ -383,12 +378,12 @@ export default function ChatContent() {
                     setIsLoading(false);
 
                     // Save this interruption message
-                    if (convIdToUse && user) {
+                    if (convIdToSave && user) {
                         const interruptMessageForApi = {
-                            ...interruptDisplayMessage,
-                            message_order: advancedAgentMessages.length, // Order after adding user message & this one
+                            ...interruptDisplayMessage, // Contains role, content, provider
+                            message_order: advancedAgentMessages.length -1, // Index of message just added
                         };
-                        saveMessagesToDb([interruptMessageForApi], convIdToUse);
+                        saveMessagesToDb([interruptMessageForApi], convIdToSave);
                     }
 
                 } else { // Completed or other final state
@@ -401,16 +396,17 @@ export default function ChatContent() {
                         toolCalls: data.toolCalls,
                         threadId: data.thread_id,
                     };
+                    // Optimistic UI update for assistant message
                     setMessages(prevMessages => [...prevMessages, finalAssistantMessage]);
                     setIsLoading(false);
 
                     // Save assistant message
-                    if (convIdToUse && user) {
+                    if (convIdToSave && user) {
                         const assistantMessageForApi = {
                             ...finalAssistantMessage,
-                            message_order: advancedAgentMessages.length, // Order after adding user message & this one
+                            message_order: advancedAgentMessages.length -1, // Index of message just added
                         };
-                        saveMessagesToDb([assistantMessageForApi], convIdToUse);
+                        saveMessagesToDb([assistantMessageForApi], convIdToSave);
                     }
                 }
 
