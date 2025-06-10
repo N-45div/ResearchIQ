@@ -6,6 +6,7 @@ import { IconSend, IconBrain, IconLoader2, IconAlertCircle, IconRobot, IconSearc
 import { useAuth } from '@/app/context/AuthContext';
 import styles from './ChatContent.module.css';
 import dynamic from 'next/dynamic';
+import { v4 as uuidv4 } from 'uuid'; // ES6 import for uuid
 
 type Message = {
     id: string;
@@ -79,8 +80,7 @@ export default function ChatContent() {
     // Import uuid for client-side ID generation
     // NOTE: This would typically be an import at the top of the file.
     // For this environment, we'll assume v4 is available if used.
-    const { v4: uuidv4 } = require('uuid'); // Using require for this environment if import is tricky at top level after initial load
-
+    // const { v4: uuidv4 } = require('uuid'); // Replaced with ES6 import
 
     // Scroll to bottom whenever messages change
     useEffect(() => {
@@ -275,54 +275,58 @@ export default function ChatContent() {
         if (!inputValue.trim() || isLoading) return;
 
         const userInputContent = inputValue.trim();
-        const localUserMessage: Message = { // Message for local UI
-            id: Date.now().toString(),
+        const localUserMessageForUI: Message = { // Message for local UI state
+            id: Date.now().toString(), // Client-side temporary ID
             role: 'user',
             content: userInputContent
         };
 
-        // Optimistic UI update for user message
+        let convIdToSave = currentConversationId;
+        let isNewConversationForSave = false;
+
         if (agentMode === 'advanced-agent') {
-            setAdvancedAgentMessages(prev => [...prev, localUserMessage]);
+            if (!convIdToSave && !currentInterruptionData) {
+                convIdToSave = uuidv4();
+                setCurrentConversationId(convIdToSave);
+                isNewConversationForSave = true;
+                console.log("Generated new conversation ID for save:", convIdToSave);
+            }
+
+            // Prepare user message for saving (using current length of advancedAgentMessages for order)
+            const userMessageForApi = {
+                role: localUserMessageForUI.role,
+                content: localUserMessageForUI.content,
+                provider: 'user',
+                message_order: advancedAgentMessages.length,
+            };
+
+            // Optimistically update UI first
+            setAdvancedAgentMessages(prev => [...prev, localUserMessageForUI]);
+            setInputValue('');
+
+            // Then save to DB
+            if (convIdToSave && user) {
+                saveMessagesToDb([userMessageForApi], convIdToSave);
+            }
         } else if (agentMode === 'voicexpert') {
-            // VoiceXpert might not show user messages in the same list,
-            // but if it did, it would be: setVoiceExpertMessages(prev => [...prev, localUserMessage]);
-            // For now, assuming VoiceXpert doesn't use this messages list for user input.
+             // For now, VoiceXpert doesn't show user messages in this list or save them.
+            setInputValue('');
         }
-        setInputValue('');
 
         setIsLoading(true);
         setIsAgentProcessing(true);
         setError(null);
         setSaveError(null);
 
-        let convIdToSave = currentConversationId;
-        if (agentMode === 'advanced-agent' && !convIdToSave && !currentInterruptionData) {
-            convIdToSave = uuidv4();
-            setCurrentConversationId(convIdToSave);
-            console.log("Generated new conversation ID for save:", convIdToSave);
-        }
-
-        // Save user message to DB
-        if (agentMode === 'advanced-agent' && convIdToSave && user) {
-            const userMessageForApi = {
-                role: localUserMessage.role,
-                content: localUserMessage.content,
-                provider: 'user',
-                message_order: advancedAgentMessages.length -1, // Index of the message just added
-            };
-            saveMessagesToDb([userMessageForApi], convIdToSave);
-        }
-
         try {
             if (agentMode === 'advanced-agent') {
                 let payload;
-                const MAX_HISTORY_MESSAGES = 10; // Increase history for supervisor
+                const MAX_HISTORY_MESSAGES = 10;
 
-                // History for supervisor should be from advancedAgentMessages *before* the current localUserMessage was added for this turn,
-                // but since we updated state optimistically, we slice before the last one.
+                // History for supervisor: use state *before* adding the current user's new message.
+                // Since advancedAgentMessages was just updated optimistically, slice off the last one for history.
                 const historyForSupervisor = advancedAgentMessages
-                    .slice(0, -1) // Exclude the optimistically added user message
+                    .slice(0, -1)
                     .slice(-MAX_HISTORY_MESSAGES)
                     .map(msg => ({ role: msg.role, content: msg.content }));
 
@@ -380,8 +384,8 @@ export default function ChatContent() {
                     // Save this interruption message
                     if (convIdToSave && user) {
                         const interruptMessageForApi = {
-                            ...interruptDisplayMessage, // Contains role, content, provider
-                            message_order: advancedAgentMessages.length -1, // Index of message just added
+                            ...interruptDisplayMessage,
+                            message_order: advancedAgentMessages.length -1, // Index of message just added to UI
                         };
                         saveMessagesToDb([interruptMessageForApi], convIdToSave);
                     }
@@ -396,15 +400,14 @@ export default function ChatContent() {
                         toolCalls: data.toolCalls,
                         threadId: data.thread_id,
                     };
-                    // Optimistic UI update for assistant message
-                    setMessages(prevMessages => [...prevMessages, finalAssistantMessage]);
+                    setAdvancedAgentMessages(prevMessages => [...prevMessages, finalAssistantMessage]); // Update UI
                     setIsLoading(false);
 
                     // Save assistant message
                     if (convIdToSave && user) {
                         const assistantMessageForApi = {
                             ...finalAssistantMessage,
-                            message_order: advancedAgentMessages.length -1, // Index of message just added
+                            message_order: advancedAgentMessages.length -1, // Index of message just added to UI
                         };
                         saveMessagesToDb([assistantMessageForApi], convIdToSave);
                     }
