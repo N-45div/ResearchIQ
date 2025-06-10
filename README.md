@@ -13,7 +13,6 @@ ResearchIQ is an advanced research assistant built with Next.js, enabling sophis
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Environment Variables](#environment-variables)
-  - [Supabase Setup](#supabase-setup)
   - [Running the Application](#running-the-application)
 - [Project Structure](#project-structure)
 - [Troubleshooting](#troubleshooting)
@@ -106,65 +105,6 @@ Follow these instructions to set up and run ResearchIQ locally.
         *   `MISTRAL_API_KEY`: For direct Mistral API usage.
         *   `GROQ_API_KEY`: For direct Groq API usage.
         *   `TOGETHER_API_KEY`: For direct Together.ai API usage.
-
-### Supabase Setup
-
-1.  Log into your [Supabase account](https://app.supabase.io) and create a new project if you haven't already.
-2.  Navigate to the **SQL Editor** in your Supabase project dashboard (usually under "Database").
-3.  Run the following SQL commands to create the `chat_messages` table and enable Row Level Security (RLS) for chat persistence:
-
-    ```sql
-    -- Required: Enable UUID extension if not already enabled
-    CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
-
-    -- Table for storing chat messages
-    CREATE TABLE IF NOT EXISTS public.chat_messages (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        user_id UUID REFERENCES auth.users(id) NOT NULL,
-        conversation_id UUID NOT NULL,
-        message_order INTEGER NOT NULL,
-        role TEXT NOT NULL, -- 'user', 'assistant', 'system', 'human'
-        content TEXT NOT NULL,
-        provider TEXT, -- e.g., 'Advanced Supervisor', 'ResearchWorker', 'User'
-        tool_calls JSONB,
-        thread_id TEXT, -- Agent-specific thread_id (e.g., for LangGraph supervisor or workers)
-        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-        updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-        metadata JSONB,
-
-        UNIQUE (conversation_id, message_order)
-    );
-
-    -- Enable Row Level Security (RLS)
-    ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
-
-    -- Policy: Users can only manage their own messages.
-    CREATE POLICY "User can manage own chat messages"
-    ON public.chat_messages
-    FOR ALL
-    USING (auth.uid() = user_id)
-    WITH CHECK (auth.uid() = user_id);
-
-    -- Indexes for performance
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_user_conv_order ON public.chat_messages (user_id, conversation_id, message_order);
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_user_updated_at ON public.chat_messages (user_id, updated_at DESC); -- For listing conversations
-
-    -- Function to update updated_at timestamp
-    CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-    RETURNS TRIGGER AS $$
-    BEGIN
-        NEW.updated_at = NOW();
-        RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-
-    -- Trigger to update updated_at on row modification
-    CREATE TRIGGER handle_chat_messages_updated_at
-    BEFORE UPDATE ON public.chat_messages
-    FOR EACH ROW
-    EXECUTE FUNCTION public.update_updated_at_column();
-    ```
-
 ### Running the Application
 
 1.  Start the development server:
