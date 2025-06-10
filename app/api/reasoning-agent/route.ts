@@ -14,13 +14,6 @@ if (!global.wikipediaSearchCache) {
     global.wikipediaSearchCache = new Map<string, string>();
 }
 
-// Usage limits
-const ANONYMOUS_LIMIT = 3;
-const LOGGED_IN_LIMIT = 10;
-
-// In-memory fallback when Redis is unavailable
-const memoryUsageStore = new Map<string, number>();
-
 // Initialize OpenRouter using OpenAI compatibility
 const openai = new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY || '',
@@ -81,35 +74,6 @@ const safeWebSearch = async (query: string) => {
 
 export async function POST(req: NextRequest) {
     try {
-        // Get user ID from cookie JWT (if available)
-        let userId = 'anonymous-' + (req.headers.get('x-forwarded-for') || 'unknown');
-        let isAuthenticated = false;
-
-        // Check if we have an authenticated session
-        const authHeader = req.headers.get('cookie') || '';
-        if (authHeader.includes('supabase-auth-token')) {
-            try {
-                // Create Supabase client
-                const supabase = createClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-                    {
-                        global: { headers: { cookie: authHeader } },
-                        auth: { persistSession: false }
-                    }
-                );
-
-                // Try to get the session
-                const { data } = await supabase.auth.getSession();
-                if (data.session?.user?.id) {
-                    userId = data.session.user.id;
-                    isAuthenticated = true;
-                }
-            } catch (error) {
-                console.error('Error getting auth session:', error);
-            }
-        }
-
         const { query, messages } = await req.json();
 
         if (!query) {
@@ -121,25 +85,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
                 { error: 'API configuration error: OpenRouter API key is not set. Please set OPENROUTER_API_KEY in your environment variables.' },
                 { status: 500 }
-            );
-        }
-
-        // Get current usage count (with memory fallback)
-        let usageCount = memoryUsageStore.get(userId) || 0;
-
-        // Check if user has exceeded their limit
-        const limit = isAuthenticated ? LOGGED_IN_LIMIT : ANONYMOUS_LIMIT;
-        if (usageCount >= limit) {
-            return NextResponse.json(
-                {
-                    error: isAuthenticated
-                        ? 'You have reached your free research limit'
-                        : 'Please log in to continue using the research feature',
-                    isLimited: true,
-                    usageCount,
-                    limit
-                },
-                { status: 429 }
             );
         }
 
@@ -212,19 +157,11 @@ Think carefully and reason step by step to provide a comprehensive, logical answ
             }
         ];
 
-        // Increment usage count
-        memoryUsageStore.set(userId, usageCount + 1);
-
         return NextResponse.json({
             text: completion.choices[0].message.content,
             toolCalls,
             provider: 'Advanced Agent (Reasoning)',
-            threadId: generatedThreadId,
-            usage: {
-                count: usageCount + 1,
-                limit: limit,
-                remaining: limit - (usageCount + 1)
-            }
+            threadId: generatedThreadId
         });
     } catch (error) {
         console.error('Reasoning Agent API error:', error);

@@ -100,13 +100,13 @@ export default function ChatContent() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to get advanced agent results');
+                const customError: any = new Error(errorData.error || 'Failed to get advanced agent results');
+                customError.response = { status: response.status, data: errorData };
+                throw customError;
             }
 
             const data = await response.json();
-            if (data.usage) {
-                setUsageInfo(data.usage);
-            }
+            // Usage info is now handled by middleware in case of 429, not in successful responses.
             if (data.threadId) {
                 setCurrentThreadId(data.threadId);
             }
@@ -139,13 +139,13 @@ export default function ChatContent() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to get reasoning agent results');
+                const customError: any = new Error(errorData.error || 'Failed to get reasoning agent results');
+                customError.response = { status: response.status, data: errorData };
+                throw customError;
             }
 
             const data = await response.json();
-            if (data.usage) {
-                setUsageInfo(data.usage);
-            }
+            // Usage info is now handled by middleware in case of 429, not in successful responses.
             if (data.threadId) {
                 setCurrentThreadId(data.threadId);
             }
@@ -177,13 +177,13 @@ export default function ChatContent() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to get multi-agent results');
+                const customError: any = new Error(errorData.error || 'Failed to get multi-agent results');
+                customError.response = { status: response.status, data: errorData };
+                throw customError;
             }
 
             const data = await response.json();
-            if (data.usage) {
-                setUsageInfo(data.usage);
-            }
+            // Usage info is now handled by middleware in case of 429, not in successful responses.
             return data;
         } catch (error) {
             console.error('Error fetching multi-agent results:', error);
@@ -258,9 +258,33 @@ export default function ChatContent() {
                     setIsLoading(false);
                 }, 500);
             }
-        } catch (error) {
-            console.error('Error in research:', error);
-            setError(error instanceof Error ? error.message : 'An error occurred during research');
+        } catch (error: any) {
+            if (error.response?.status === 429 && error.response?.data?.isLimited) {
+                const limitMessageContent = user
+                    ? "You have reached your request limit for this period."
+                    : "You've reached your free request limit. Please [sign in](/auth/signin) to continue.";
+
+                const rateLimitMessage: Message = {
+                    id: `error-${Date.now()}`,
+                    role: 'assistant', // Or 'system' or a new role 'error'
+                    content: limitMessageContent,
+                    provider: 'System'
+                };
+                setMessages(prev => [...prev, rateLimitMessage]);
+                setError(null); // Clear generic error if it's a rate limit error
+            } else {
+                console.error('Error in research:', error);
+                const errorMessage = error.response?.data?.error || (error instanceof Error ? error.message : 'An error occurred during research');
+                setError(errorMessage);
+                // Optionally add a generic error message to chat
+                // const genericErrorMessage: Message = {
+                //     id: `error-${Date.now()}`,
+                //     role: 'assistant',
+                //     content: errorMessage,
+                //     provider: 'System Error'
+                // };
+                // setMessages(prev => [...prev, genericErrorMessage]);
+            }
             setIsLoading(false);
         }
     };
@@ -286,7 +310,9 @@ export default function ChatContent() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to process human interaction');
+                const customError: any = new Error(errorData.error || 'Failed to process human interaction');
+                customError.response = { status: response.status, data: errorData };
+                throw customError;
             }
 
             const data = await response.json();
@@ -316,9 +342,25 @@ export default function ChatContent() {
                 }
             }, 500);
 
-        } catch (error) {
-            console.error('Error in human interaction:', error);
-            setError(error instanceof Error ? error.message : 'An error occurred during human interaction');
+        } catch (error: any) {
+            if (error.response?.status === 429 && error.response?.data?.isLimited) {
+                const limitMessageContent = user
+                    ? "You have reached your request limit for this period."
+                    : "You've reached your free request limit. Please [sign in](/auth/signin) to continue.";
+
+                const rateLimitMessage: Message = {
+                    id: `error-${Date.now()}`,
+                    role: 'assistant',
+                    content: limitMessageContent,
+                    provider: 'System'
+                };
+                setMessages(prev => [...prev, rateLimitMessage]);
+                setError(null);
+            } else {
+                console.error('Error in human interaction:', error);
+                const errorMessage = error.response?.data?.error || (error instanceof Error ? error.message : 'An error occurred during human interaction');
+                setError(errorMessage);
+            }
             setIsLoading(false);
         }
     };
@@ -344,9 +386,20 @@ export default function ChatContent() {
 
             // We don't store messages in VoiceXpert mode anymore
             // The VapiVoiceAgent component handles the conversation display
-        } catch (error) {
-            console.error('Error in VoiceXpert research:', error);
-            setError(error instanceof Error ? error.message : 'An error occurred during VoiceXpert research');
+        } catch (error: any) {
+             if (error.response?.status === 429 && error.response?.data?.isLimited) {
+                // For VoiceXpert, we might not add to messages, but set a general error
+                // Or, if there's a way to show a system message in Vapi's UI, use that.
+                // For now, setting the general error state that is displayed in the UI.
+                const limitMessageContent = user
+                    ? "You have reached your request limit for this period."
+                    : "You've reached your free request limit. Please sign in to continue.";
+                setError(limitMessageContent);
+            } else {
+                console.error('Error in VoiceXpert research:', error);
+                const errorMessage = error.response?.data?.error || (error instanceof Error ? error.message : 'An error occurred during VoiceXpert research');
+                setError(errorMessage);
+            }
             setIsLoading(false);
         }
     };

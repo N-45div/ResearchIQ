@@ -23,13 +23,6 @@ if (!global.googleScholarCache) {
     global.googleScholarCache = new Map<string, string>();
 }
 
-// Usage limits
-const ANONYMOUS_LIMIT = 3;
-const LOGGED_IN_LIMIT = 10;
-
-// In-memory fallback when Redis is unavailable
-const memoryUsageStore = new Map<string, number>();
-
 // Initialize Groq model
 const getGroqModel = () => {
     try {
@@ -266,35 +259,6 @@ Please synthesize this information into a comprehensive answer to my question.`)
 
 export async function POST(req: NextRequest) {
     try {
-        // Get user ID from cookie JWT (if available)
-        let userId = 'anonymous-' + (req.headers.get('x-forwarded-for') || 'unknown');
-        let isAuthenticated = false;
-
-        // Check if we have an authenticated session
-        const authHeader = req.headers.get('cookie') || '';
-        if (authHeader.includes('supabase-auth-token')) {
-            try {
-                // Create Supabase client
-                const supabase = createClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-                    {
-                        global: { headers: { cookie: authHeader } },
-                        auth: { persistSession: false }
-                    }
-                );
-
-                // Try to get the session
-                const { data } = await supabase.auth.getSession();
-                if (data.session?.user?.id) {
-                    userId = data.session.user.id;
-                    isAuthenticated = true;
-                }
-            } catch (error) {
-                console.error('Error getting auth session:', error);
-            }
-        }
-
         const { query, messages } = await req.json();
 
         if (!query) {
@@ -306,25 +270,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
                 { error: 'API configuration error: No AI provider API keys are set. Please set either GROQ_API_KEY or TOGETHER_API_KEY in your environment variables.' },
                 { status: 500 }
-            );
-        }
-
-        // Get current usage count (with memory fallback)
-        let usageCount = memoryUsageStore.get(userId) || 0;
-
-        // Check if user has exceeded their limit
-        const limit = isAuthenticated ? LOGGED_IN_LIMIT : ANONYMOUS_LIMIT;
-        if (usageCount >= limit) {
-            return NextResponse.json(
-                {
-                    error: isAuthenticated
-                        ? 'You have reached your free research limit'
-                        : 'Please log in to continue using the research feature',
-                    isLimited: true,
-                    usageCount,
-                    limit
-                },
-                { status: 429 }
             );
         }
 
@@ -376,19 +321,11 @@ export async function POST(req: NextRequest) {
         // Run the research agent
         const result = await createResearchAgent(query, context, messages || []);
 
-        // Increment usage count
-        memoryUsageStore.set(userId, usageCount + 1);
-
         return NextResponse.json({
             text: result,
             toolCalls,
             provider: 'LangChain Research Agent',
-            threadId: generatedThreadId,
-            usage: {
-                count: usageCount + 1,
-                limit: limit,
-                remaining: limit - (usageCount + 1)
-            }
+            threadId: generatedThreadId
         });
     } catch (error) {
         console.error('LangChain Agent API error:', error);
