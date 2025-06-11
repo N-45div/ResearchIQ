@@ -73,11 +73,11 @@ Follow these instructions to set up and run ResearchIQ locally.
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/your-username/researchiq.git # Replace with actual URL
+    git clone https://github.com/N-45div/ResearchIQ.git
     ```
 2.  Navigate to the project directory:
     ```bash
-    cd researchiq
+    cd ResearchIQ
     ```
 3.  Install dependencies:
     ```bash
