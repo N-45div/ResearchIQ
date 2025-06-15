@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Vapi from '@vapi-ai/web';
-import { useAuth } from '@/app/context/AuthContext'; // Import useAuth
+import { useAuth } from '../context/Authcontext'; // Import useAuth
 
 const publicApiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY || '';
 const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID || '';

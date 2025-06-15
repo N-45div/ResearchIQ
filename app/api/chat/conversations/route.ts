@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server'; // Assuming a server client utility
+import { createClient } from '@/app/utils/supabase/server'; // Assuming a server client utility
 import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 
