@@ -1,6 +1,5 @@
 # 🧠 ResearchIQ – Voice-Powered Research Assistant
 
-**ResearchIQ** is a Next.js-based research tool with voice and text input, powered by a supervisor agent that coordinates research and reasoning workflows. It supports Human-in-the-Loop (HITL) query refinement and uses free-tier OpenRouter LLMs. Voice features are enabled via Vapi AI.
 ---
 
 ## 🔑 Key Features
