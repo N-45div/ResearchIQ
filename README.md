@@ -43,8 +43,8 @@
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/researchiq.git
-cd researchiq
+git clone https://github.com/N-45div/ResearchIQ.git
+cd ResearchIQ
 npm install
 ```
 
